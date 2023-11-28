@@ -1,0 +1,500 @@
+# Table of Contents
+1. [Section 2: Building a Walking Skeleton](#section-2-building-a-walking-skeleton)
+    - [Creating the .NET API project using the dotnet CLI](#creating-the-net-api-project-using-the-dotnet-cli)
+    - [Setting up VS code to work with C#](#setting-up-vs-code-to-work-with-c)
+    - [Getting to know the API Project Files](#getting-to-know-the-api-project-files)
+    - [Creating our first Entity](#creating-our-first-entity)
+    - [Introduction to Entity Framework](#introduction-to-entity-framework)
+    - [Adding Entity Frmamework to our Project](#adding-entity-frmamework-to-our-project)
+    - [Adding a DbContext Class](#adding-a-dbcontext-class)
+    - [Creating the Connection String](#creating-the-connection-string)
+    - [Creating the Database using Entity Framework Code first Migration](#creating-the-database-using-entity-framework-code-first-migration)
+    - [Adding a New API Controller](#adding-a-new-api-controller)
+    - [Making our Code Asynchronous](#making-our-code-asynchronous)
+    - [Saving our Code into Source Control](#saving-our-code-into-source-control)
+<hr/><hr/>
+
+## Section 2: Building a Walking Skeleton
+
+### Creating the .NET API project using the dotnet CLI
+- we'll be using the **dotnet cli** to create this project
+    - I created a folder for the project then opened the folder using GIT Bash
+    - the following command will list all the options you can use to create a new dotnet project 
+        ```console 
+        /c/DatingApp:
+        $ dotnet new -h
+        ```
+    - this next command will create the Dotnet project solution. If it is not given a name in the cli, it will take the name of the containing folder
+        ```console 
+        /c/DatingApp:
+        $ dotnet new sln
+        ```
+    - next we want to create our project file which will be our webapi. The option after the n is the name we are giving the the new folder
+        ```console 
+        /c/DatingApp:
+        $ dotnet new webapi -n API
+        ```
+    - NOW we want to put our API project inside our solution
+        ```console 
+        /c/DatingApp:
+        $ dotnet sln -h
+        ```
+        ```console 
+        /c/DatingApp:
+        $ dotnet sln add API/
+        ```
+    - NOTE: all dotnet projects all contain a .csproj file
+    - just to be sure let's run a command to see what projects are contained within our solution
+        ```console 
+        /c/DatingApp:
+        $ dotnet sln list
+        ```
+    - the next comman will open our project in vscode
+        ```console 
+        /c/DatingApp:
+        $ code .
+        ```
+<hr/>
+
+### Setting up VS code to work with C#
+- in vscode, under extension, install the C# Dev kit
+    - this will give us **.Net RunTime Intall Tool**, **C#** **C# Dev Kit**, and **IntelliCode for C# Dev Kit** (*this one is an AI assistant that attempts to predict what you're trying to write and autocomplete it. . .I've turned it off for the time being*)
+    - the Dev Kit actually gives us a **Solution Explorer** similar **Visual Studio**. Nifty!
+        - Inside the solution explorer with the devkit, we are able to right click and create new files or classes!
+<hr/>
+
+### Getting to know the API Project Files
+- from the route out our project cd into the api folder
+    ```console 
+    /c/DatingApp:
+    $ cd API/ 
+    ```
+- from there run the project
+    ```console 
+    /c/DatingApp/API:
+    $ dotnet run
+    ```
+- here will see our project running on a random port
+    - dotnet initializes with a sample controller that we can use to test if our project is running. A controller is something our project listens for when running
+    - the WeatherForecast control hasd a single end point, that we can append to the url of our port. 
+    example:
+        ```code 
+        http://localhost:5027/WeatherForecast
+        ```
+    - launchSettings.JSON contains our project settings
+        - examples, whether browser should launch when the project runs (*we're setting it to false*), the port number, swagger (http://localhost:5027/swagger) (*this shows our available endpoints, however for this course we will remove it*)
+        - we've changed our default development port to 5000 and added a https port of 5001
+        - We've also removed the other profiles
+
+- now, we run a new command:
+    ```console 
+    /c/DatingApp/API:
+    $ dotnet watch
+    ```
+    - I had to configure my program.css file to handle https.The following was added to the existing boiler plate
+    ```c#
+    using System.Net;
+    // Add HTTPS Redirection service with specified port
+    builder.Services.AddHttpsRedirection(options =>
+    {
+        options.RedirectStatusCode = (int)HttpStatusCode.TemporaryRedirect;
+        options.HttpsPort = 5001;
+    });
+    ```
+<hr/>
+
+### Creating our first Entity
+- under the API repo, add a folder called Entities
+- Using the C# devKit we can right click *Entities* folder and add file. This will pull up different file types 
+    - Create a class file called **AppUser.cs**
+    - here we can type ```prop``` and the intellicode will allow you to press tab and autocomplete a generic property that we can modify to our wishes. 
+    - Strings must be declared required or nullable now. Adding a ? to the string property decorates it as nullable/optional.
+
+<hr/>
+
+### Introduction to Entity Framework
+- **ORM**
+    - ***Object Relational Mapper***
+    - Translates our code into SQL commands that update our tables in the database
+    [sqlite](../dotnet-angular-udemy/intro-to-ef-1.png)
+- for our project we'll be using sqlite.
+    - **sqlite** is not productionr eady, but is great for local development
+
+- EF
+    - querying
+    - change tracking
+    - saving
+    - concurrency
+    - transactions
+    - caching
+    - built-in conventions
+    - configurations
+    - migrations
+
+<hr/>
+
+### Adding Entity Frmamework to our Project
+- Add the extension **NuGet Gallery**
+- open the command pallete, search for Nuget Galelry, then in nuget gallery search:
+    - microsoft.entityFrameworkCore
+        - Microsoft.EntityFrameworkCore.Sqlite
+        - Microsoft.EntityFrameworkCore.Design
+
+<hr/>
+
+### Adding a DbContext Class
+- create a folder under the api project called **Data**
+    - within it a file with a class called **DataContext**
+<div style="color:red;">IMPORTANT: <p style="color:red;">Typically when you create a class, it will contain a namespace of the logical folder the class is inside of. So that when we want to refer to class from somewhere else in our application, we'd need a Using statement. C# dev kit doesn't do this natively, but we will as it is best practice </p> </div> 
+
+```c#
+namespace API.Data; // right here
+
+public class DataContext : DbContext
+{
+
+}
+```
+
+- the above gives us a session with our database
+- next we must generate a constructor.
+    - this can be down by placing the cursor inside the class, Clicking the lightbulb, and selection `Generate constructor 'DataContext(options)'`
+
+```c#
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Data;
+
+public class DataContext : DbContext
+{
+    public DataContext(DbContextOptions options) : base(options)
+    {
+    }
+}
+```
+- A constructor gets run when a new class is created so when a new instance of our `DataContext` is created,  the constructor is called and looks for the options that we provide
+- The base class we are deriving from, in the above, is the `DbContext`
+- We also need to rpovide `DbSDets`
+    - type out `prop` and select `DbSet<>` from the autocomplete. The we specify `<AppUser>` as the entity name. And give the name of `Users` to the dbsey
+```c#
+using API.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Data;
+
+public class DataContext : DbContext
+{
+    public DataContext(DbContextOptions options) : base(options)
+    {
+    }
+    
+    public DbSet<AppUser> Users { get; set; }
+}
+```
+
+- now if we call the propert: `Users`, that will represent the name of our table in the database when it is created
+- If we've done things correctly if we go to definition of our `AppUser` class from the DbSet, we should see the properties of the class. (`Id` `Username`).
+    - these will be columns in our database
+- Now we need to tell our application that `DataContext.cs` is a service and that it exists
+    - go to `Program.cs`
+```c#
+using System.Net;
+using API.Data;
+using Microsoft.EntityFrameworkCore;
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+builder.Services.AddDbContext<DataContext>(opt => 
+{
+    opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
+```
+
+<hr/>
+
+### Creating the Connection String
+- we're adding a connection string
+- majority of our development will be in the ```appsettings.Development.json```. Which can only be read from when the application is in **development** mode
+- ```appsettings.json``` will alwys be read from no matter what mode the application is in
+- in ```appsettings.Development.json``` we need to add a **sqlite** connection string.
+- there is no type safety in these files, so be careful and delibrate with your syntax
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Information"
+    }
+  },
+  //here's what we add.
+  "ConnectionStrings": {
+    "DefaultConnection": "Data source=datingapp.db"
+  }
+}
+```
+
+- Now we need to install the Entity Framework Core Tools for .Net CLI
+    - [dotnet-ef download](https://www.nuget.org/packages/dotnet-ef/)
+- Next we'll be adding a migration. For this, it is important that we have our API server stopped.
+
+```console 
+/c/DatingApp/API:
+$ dotnet ef migrations add InitialCreate -o Data/Migrations
+```
+- Inside the **Migrations** folder you'll see 3 files
+    - the ```Designer.cs``` file allows you to roll back to an earlier migration. However the one we're interested in is the ```InitialCreates.cs```
+
+<hr/>
+
+### Creating the Database using Entity Framework Code first Migration
+
+- Now we can go ahead and create our database. We can look at our database options with the following command
+
+```console 
+/c/DatingApp/API:
+$ dotnet ef database -h
+```
+
+- now let's create our database
+
+```console
+/c/DatingApp/API:
+$ dotnet ef database update
+```
+
+- just an aside: ***I was getting build errors from projects outside of my projhect folder regarding http needing to be upgraded to HTTPS. What I found is that I didn't have the nuget CLI installed. I'm not sure if thatw as related to build errors. Anyways uget cli does not come with Visual Studio. I had to install it manually and dd it's containing folder path to my computer's PATH variables. There I was able to then run a nuget CLI command to update the offending http source. Here's the command I ran:***
+
+```console
+$ nuget sources update -name <SourceName> -source <NewSourceUrl>
+```
+
+- after creating our db we'll see it in our solution. VSCode doesn't natively know how to display it.
+    - Need to install **SQLite Explore and query SQLite databases** extension. Once isntalled open the command pallete. Search SQLite, and select your database.
+    - It will then be added to a sqlite explorer in your solution window
+
+- no in sqlite explorer window, `right click` on **Users** > **New Query Insert** >
+```sql
+INSERT INTO Users (Id, Username)
+VALUES (1, "Bob");
+
+INSERT INTO Users (Id, Username)
+VALUES (2, "Rob");
+
+INSERT INTO Users (Id, Username)
+VALUES (3, "Slob");
+```
+- this will add 3 new users to our users table. And we can see this by clicking the play button on the user table in our SQLITE Explorer
+
+<hr/>
+
+### Adding a New API Controller
+-  we have a database, now we will retrieve from that database using an API controller endpoint
+- do the following: Controllers Folder > Add New File > Class > **UsersController**
+    - in this file, maintain proper conventions and make sure the namespace is using the folder name
+```c#
+UsersController.cs
+
+namespace API.Controllers;
+
+public class UsersController
+{
+
+}
+
+```
+
+- now we need to add some things to our controller file:
+
+```c#
+UsersController.cs
+
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")] // this accepts the first part of the control and uses it for the route https://localhost:5001/api/users
+public class UsersController : ControllerBase
+{
+
+}
+
+```
+
+- Here we need to get access to our database so we can query the users. And we do this by creating a **constructor**
+    - type in `ctor` inside your class and intellisense will prompt you to autocomplete a constructor with *Parameters*
+
+- here for our future use we should define an editor config file. So that we're not overusing decarations or having to type them out each time
+
+    ```
+    .editorconfig
+
+    [*.{cs,vb}]
+    dotnet_naming_rule.private_members_with_underscore.symbols  = private_fields
+    dotnet_naming_rule.private_members_with_underscore.style    = prefix_underscore
+    dotnet_naming_rule.private_members_with_underscore.severity = suggestion
+
+    dotnet_naming_symbols.private_fields.applicable_kinds           = field
+    dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+    dotnet_naming_style.prefix_underscore.capitalization = camel_case
+    dotnet_naming_style.prefix_underscore.required_prefix = _
+
+    ```
+
+    - Naming Convention: Prefixing private fields with an underscore (e.g., _context) is a common naming convention in C#. It helps distinguish between private fields and other class members, such as properties or method parameters. This convention makes the code more readable and helps avoid naming conflicts between fields and other class members.
+
+    - Clarity: Prefixing with an underscore helps clearly identify that _context is a field rather than a property or method. This clarity can be especially helpful when reading or maintaining the code. 
+- after all this, class should look like this
+
+```c#
+UsersController.cs
+
+using API.Data;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")] // this accepts the first part of the control and uses it for the route https://localhost:5001/api/users
+public class UsersController : ControllerBase
+{
+    private readonly DataContext _context;
+
+    public UsersController(DataContext context)
+    {
+        _context = context;
+    }
+}
+
+```
+- it's time for some api endpoints
+
+```c#
+UsersController.cs
+
+using API.Data;
+using API.Entities;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")] // this accepts the first part of the control and uses it for the route https://localhost:5001/api/users
+public class UsersController : ControllerBase
+{
+    private readonly DataContext _context;
+
+    public UsersController(DataContext context)
+    {
+        _context = context;
+    }
+
+    [HttpGet]
+    public ActionResult<IEnumerable<AppUser>> GetUsers()
+    {
+        var users = _context.Users.ToList();
+
+        return users;
+    }
+
+    [HttpGet("{id}")] // this get is looking for a user with an id that matchers the number in the parameter
+    public ActionResult<AppUser> GetUser(int id)
+    {
+        var user = _context.Users.Find(id);
+
+        if (user == null)
+        {
+            return NotFound(); // Or return another meaningful response.
+        }
+
+        return user;
+    }
+}
+```
+- now we can hit our endpoints in postman
+    - https://localhost:5001/api/users
+    - https://localhost:5001/api/users/2
+
+<hr/>
+
+### Making our Code Asynchronous
+
+1. Asynchronous Request (Modern Approach):
+    - In an asynchronous scenario, you (the customer) sit at your table and ask the waiter (the server) for a steak dinner, just like before.
+    - However, this time, the waiter takes your order, writes it down, and tells you that they will bring your meal to you when it's ready.
+    - Instead of rushing to the kitchen, the waiter takes orders from other tables and serves drinks to other customers while your steak is being cooked.
+    - You, the customer, are free to chat with your friends, read a book, or do whatever you like while waiting. You don't need to focus on the cooking process.
+    - After some time, when the steak is cooked, the waiter brings it to your table, and you enjoy your meal.
+    - In this asynchronous scenario, you (the customer) and the waiter are loosely coupled. You don't need to wait at your table or be actively involved in the cooking process. The waiter takes care of other tasks and serves multiple customers simultaneously, providing a more efficient and flexible dining experience.
+
+```c#
+UsersController.cs
+
+using API.Data;
+using API.Entities;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")] // this accepts the first part of the control and uses it for the route https://localhost:5001/api/users
+public class UsersController : ControllerBase
+{
+    private readonly DataContext _context;
+
+    public UsersController(DataContext context)
+    {
+        _context = context;
+    }
+
+    [HttpGet]
+    public async Task <ActionResult<IEnumerable<AppUser>>> GetUsers()
+    {
+        var users = await _context.Users.ToListAsync();
+
+        return users;
+    }
+
+    [HttpGet("{id}")] // this get is looking for a user with an id that matchers the number in the parameter
+    public async Task <ActionResult<AppUser>> GetUser(int id)
+    {
+        var user = await _context.Users.FindAsync(id);
+
+        if (user == null)
+        {
+            return NotFound(); // Or return another meaningful response.
+        }
+
+        return user;
+    }
+}
+```
+
+<hr/>
+
+### Saving our Code into Source Control
+
+- from the parent directory of our Dating App directory:
+```console
+/c/DatingApp:
+$ git init
+```
+
+```console
+/c/DatingApp:
+$ dotnet new gitignore
+```
+
+- in the solution explorer right click on the appsettings.json file and add it to the .gitignore file
+    - appsettings is where we'll be storing our apikeys\
+
+```console
+/c/DatingApp:
+$ dotnet new globaljson
+```
+- the `globaljason` file, when another developer builds this project, will tell their compiler to use the sdks that we used when we initialized the project. 
+    - you'll probably never need to touch it again.
