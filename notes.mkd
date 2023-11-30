@@ -1,5 +1,5 @@
 # Table of Contents
-1. [Section 2: Building a Walking Skeleton](#section-2-building-a-walking-skeleton)
+1. [Section 2: Building a Walking Skeleton](#section-2-building-a-walking-skeleton-part-one---api)
     - [Creating the .NET API project using the dotnet CLI](#creating-the-net-api-project-using-the-dotnet-cli)
     - [Setting up VS code to work with C#](#setting-up-vs-code-to-work-with-c)
     - [Getting to know the API Project Files](#getting-to-know-the-api-project-files)
@@ -12,9 +12,18 @@
     - [Adding a New API Controller](#adding-a-new-api-controller)
     - [Making our Code Asynchronous](#making-our-code-asynchronous)
     - [Saving our Code into Source Control](#saving-our-code-into-source-control)
+     <hr/>
+2. [Section 3: Building a Walking Skeleton Part Two - Angular](#section-3-building-a-walking-skeleton-part-two---angular)
+    - [Introduction](#intro)
+    - [Creating the Angular Application](#creating-the-angular-application)
+    - [Running the angular project and reviewing the bootstrap of the app](#running-the-angular-project-and-reviewing-the-bootstrap-of-the-app)
+    - [Adding VS Code extensions to work with Angular](#adding-vs-code-extensions-to-work-with-angular)
+    - [Making HTTP requests in Angular](#making-http-requests-in-angular)
+    - [Adding CORS support in the API](#adding-cors-support-in-the-api)
+
 <hr/><hr/>
 
-## Section 2: Building a Walking Skeleton
+## Section 2: Building a Walking Skeleton Part One - API
 
 ### Creating the .NET API project using the dotnet CLI
 - we'll be using the **dotnet cli** to create this project
@@ -498,3 +507,175 @@ $ dotnet new globaljson
 ```
 - the `globaljason` file, when another developer builds this project, will tell their compiler to use the sdks that we used when we initialized the project. 
     - you'll probably never need to touch it again.
+
+- now just publish your project to ol'github
+![ol'github](./images/image.png)
+
+<hr/>
+<hr/>
+
+## Section 3: Building a Walking Skeleton Part Two - Angular
+
+### Intro
+
+1. Using the Angular CLI
+2. How to create a new Angular App
+3. The Angular Project Files
+4. The Angular Bootstrap Process
+5. Using the Angular http Client Service
+6. Running an Angular App over HTTPS
+7. How to add packages using NPM
+
+<hr/>
+
+### Creating the Angular Application 
+
+<div style="color:red;">IMPORTANT: <p style="color:red;">I've created my angular project, globally my angular version is 15 sadly. Im sure that'll create challenges but, it'll be experience hopefully</p></div>
+
+<hr/>
+
+### Running the angular project and reviewing the bootstrap of the app
+- < app-root > is a component created using angular and passed down as html in the `index.html`
+- EVERY angular application must have a `module.ts` file
+
+<hr/>
+
+### Adding VS Code extensions to work with Angular
+
+- Search extensions for `Angular Language Service`
+
+- also turn on bracket and quote auto-completes in the vscode prefences
+
+<hr/>
+
+### Making HTTP requests in Angular
+
+```ts
+app.module.ts
+
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import {HttpClientModule} from '@angular/common/http'
+
+import { AppRoutingModule } from './app-routing.module';
+import { AppComponent } from './app.component';
+
+@NgModule({
+  declarations: [
+    AppComponent
+  ],
+  imports: [
+    BrowserModule,
+    AppRoutingModule,
+    HttpClientModule
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+```
+
+
+```ts
+app.component.ts
+
+import { HttpClient } from '@angular/common/http';
+import { Component, OnInit } from '@angular/core';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
+})
+
+export class AppComponent implements OnInit {
+
+  title = 'Andy';
+  users: any;
+
+  constructor(private http: HttpClient) { }
+
+  ngOnInit(): void {
+    this.http.get('https://localhost:5001/api/users').subscribe({
+      next: response => this.users = response,
+      error: error => console.log(error),
+      complete: () => console.log('completed')
+    })
+  }
+
+
+}
+```
+
+- it doesn't look like we're using rxjs here. . .
+-  anyways looking at the console of the dev tools when the api and app are running, we see http error
+
+<hr/>
+
+### Adding CORS support in the API
+
+- cors is a browser security feature
+
+- i'm going to rewrite the call using rxjs
+```ts
+app.component.ts
+
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Subscription } from 'rxjs';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
+})
+export class AppComponent implements OnInit, OnDestroy {
+  private subscriptions = new Subscription();
+  public title = 'andy';
+
+  constructor(private http:HttpClient){}
+
+  ngOnInit() {
+    // Create an Observable out of a promise
+    const data = this.http.get('https://localhost:5001/api/users')
+
+    // Subscribe to begin listening for async result
+    // Add the subscription to the subscriptions property
+
+    this.subscriptions.add(
+      data.subscribe({
+        next(response) { console.log(response); },
+        error(err) { console.error('Endpoint Error: ' + err); },
+        complete() { console.log('Completed'); }
+      })
+    )
+  }
+
+  ngOnDestroy() {
+    // Unsubscribe from all subscriptions when the component is destroyed
+    this.subscriptions.unsubscribe();
+  }
+}
+
+
+```
+
+- so to solve our cors issues we need to begin by going to our program class in our API
+     - add a service 
+
+    ```c#
+    program.cs
+
+    builder.Services.AddCors();
+    ```
+
+    - next we modify our request on its way out back to client and add the header
+    - we do this in the middleware
+
+    ```c#
+    program.cs
+
+    // Configure the HTTP request pipeline
+    app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().WithOrigins("http://localhost:4200"));
+    ```
+
