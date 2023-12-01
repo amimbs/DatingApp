@@ -20,7 +20,8 @@
     - [Adding VS Code extensions to work with Angular](#adding-vs-code-extensions-to-work-with-angular)
     - [Making HTTP requests in Angular](#making-http-requests-in-angular)
     - [Adding CORS support in the API](#adding-cors-support-in-the-api)
-
+    - [Displaying Fetched Users in the browser](#displaying-fetched-users-in-the-browser)
+    - [Adding bootstrap and font-awesome](#adding-bootstrap-and-font-awesome)
 <hr/><hr/>
 
 ## Section 2: Building a Walking Skeleton Part One - API
@@ -679,3 +680,101 @@ export class AppComponent implements OnInit, OnDestroy {
     app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().WithOrigins("http://localhost:4200"));
     ```
 
+<hr/>
+
+### Displaying Fetched Users in the browser
+
+- I corrected some mistakes here. I changed the functions inside my subscribe method to arrow functions. Allowing the use of `this.users`. I created a users variable and assign my response to it in the `next` function of my subscribe method.
+
+```ts
+app.component.ts
+
+users: any;
+
+  constructor(private http: HttpClient) { }
+
+  ngOnInit() {
+    // Create an Observable out of a promise
+    const data = this.http.get('https://localhost:5001/api/users')
+
+    // Subscribe to begin listening for async result
+    // Add the subscription to the subscriptions property
+
+    this.subscriptions.add(
+      data.subscribe({
+        next: (response) => {
+          this.users = response;
+          console.log(response);
+        },
+        error: (err) => {
+
+          // i think this may be an error between angular vesrions. Below is written correctly however in the dom we see 
+          //and error in the soruces as if it can't interpret the .error method
+          console.error('Error: ' + err.statusText);
+        },
+        complete: () => { console.log('Request completed'); }
+      })
+    )
+  }
+```
+
+<hr/>
+
+### Adding bootstrap and font-awesome
+- in this section I'm going to make things more difficult for myself, and instead use [DraculaUI](https://ui.draculatheme.com/installation)
+
+- ok here are the steps:
+    - `npm install dracula-ui`
+    - go to `package-lock.json` and confirm it's been added tou the dependencies
+    -  go to `angular.json` and add the following to the build properties
+    ```json
+    "projects": {
+        "client": {
+        "architect": {
+            "build": {
+            "builder": "@angular-devkit/build-angular:browser",
+            "options": {
+                "outputPath": "dist/client",
+                "index": "src/index.html",
+                "main": "src/main.ts",
+                "polyfills": [
+                "zone.js"
+                ],
+                "tsConfig": "tsconfig.app.json",
+                "inlineStyleLanguage": "scss",
+                "assets": [
+                "src/favicon.ico",
+                "src/assets"
+                ],
+                "styles": [
+                "src/styles.scss",
+                "node_modules/dracula-ui/styles/dracula-ui.css" // right here
+                ],
+    ```
+
+    - add the reference for the style sheet in the head of the project's `index.html`
+    ```html
+    index.html
+
+    <head>
+      <link rel="stylesheet" href="/client/node_modules/dracula-ui/styles/dracula-ui.css" />    
+    <head>
+
+    ``` 
+
+    - stop and serve the project, then just call the classes in the html and you're good to go
+
+```html
+app.component.html
+
+<div class="drac-box drac-bg-black">
+    <h1 class="drac-text drac-text-white"> {{title}} </h1>
+
+    <ul class="drac-list drac-list-unordered drac-list-purple">
+        <li *ngFor="let user of users" class="drac-text drac-text-white">{{user.id}} - {{user.username}}</li>
+    </ul>
+</div>
+
+```
+- the class is using `ngx-bootstrap`
+- Now, install `font-awesome`: `npm i font-awesome`

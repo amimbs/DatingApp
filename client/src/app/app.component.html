@@ -1,1 +1,7 @@
-<h1> {{title}} </h1>
+<div class="drac-box drac-bg-black">
+    <h1 class="drac-text drac-text-white"> {{title}} </h1>
+
+    <ul class="drac-list drac-list-unordered drac-list-purple">
+        <li *ngFor="let user of users" class="drac-text drac-text-white">{{user.id}} - {{user.username}}</li>
+    </ul>
+</div>

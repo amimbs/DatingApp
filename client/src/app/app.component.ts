@@ -9,7 +9,8 @@ import { Subscription } from 'rxjs';
 })
 export class AppComponent implements OnInit, OnDestroy {
   private subscriptions = new Subscription();
-  public title = 'andy';
+  title = 'DatingApp';
+  users: any;
 
   constructor(private http: HttpClient) { }
 
@@ -22,14 +23,17 @@ export class AppComponent implements OnInit, OnDestroy {
 
     this.subscriptions.add(
       data.subscribe({
-        next(response) { console.log(response); },
-        error(err) { 
+        next: (response) => {
+          this.users = response;
+          console.log(response);
+        },
+        error: (err) => {
 
           // i think this may be an error between angular vesrions. Below is written correctly however in the dom we see 
           //and error in the soruces as if it can't interpret the .error method
-          console.error('Error: ' + err.statusText); 
+          console.error('Error: ' + err.statusText);
         },
-        complete() { console.log('Request completed'); }
+        complete: () => { console.log('Request completed'); }
       })
     )
   }
