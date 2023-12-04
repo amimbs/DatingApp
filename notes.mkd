@@ -22,6 +22,7 @@
     - [Adding CORS support in the API](#adding-cors-support-in-the-api)
     - [Displaying Fetched Users in the browser](#displaying-fetched-users-in-the-browser)
     - [Adding bootstrap and font-awesome](#adding-bootstrap-and-font-awesome)
+    - [Adding HTTPS to Angular using mkcert](#adding-https-to-angular-using-mkcert)
 <hr/><hr/>
 
 ## Section 2: Building a Walking Skeleton Part One - API
@@ -778,3 +779,57 @@ app.component.html
 ```
 - the class is using `ngx-bootstrap`
 - Now, install `font-awesome`: `npm i font-awesome`
+
+<hr/>
+
+### Adding HTTPS to Angular using mkcert
+- elevate vscode so that it is running in `administrator` mode
+- `choco install mkcert`
+- `mkcert -install`
+from the client folder in angular ` mkdir ssl` , `cd ssl`
+- `mkcert -install`
+- in `angular.json `:
+
+```json
+"serve": {
+    "options": {
+    "ssl": true,
+    "sslCert": "./ssl/localhost.pem",
+    "sslKey": "./ssl/localhost-key.pem"
+    },
+```
+- finally `ng serve` and you should see you app now running locally using https
+<div style="color:red;">IMPORTANT:
+    <div>Couple of bugs I encountered: </div>
+    <ul>
+        <li>
+            *Refused to apply style from "https://localhost/etc": MIME type error* This occured becasue I was calling the UI library style sheet in the index.html of the project. There were 2 solutions to thus. 1) change the href to a src. 2) Simply call the style sheet in the angular.json
+        </li>
+    </ul>
+</div> 
+
+```json
+angular.json
+
+"styles": [
+    "./node_modules/dracula-ui/styles/dracula-ui.css",
+    "./node_modules/font-awesome/css/font-awesome.min.css",
+    "src/styles.scss"
+],
+```
+
+<div style="color:red;">
+    <ul style="color:red;">
+        <li>
+            The next bug was that the data from the backend wasn't loading in the frontend. Which was because the configuration for the middleware was told to look for http, and not https. Easily resolved.
+        </li>
+    </ul>
+</div>
+
+```c#
+Program.cs
+
+app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().WithOrigins("https://localhost:4200"));
+```
+
+- I've also added the `/ssl/` folder to the `.gitignore` file.
