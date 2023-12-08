@@ -23,6 +23,15 @@
     - [Displaying Fetched Users in the browser](#displaying-fetched-users-in-the-browser)
     - [Adding bootstrap and font-awesome](#adding-bootstrap-and-font-awesome)
     - [Adding HTTPS to Angular using mkcert](#adding-https-to-angular-using-mkcert)
+    <hr/>
+3. [Section 4: Authentication Basics](#section-4-authentication-basics)
+    - [Introduction](#intro-1)
+    - [Safe storage of passwords](#safe-storage-of-passwords)
+    - [Updating the user entity](#updating-the-user-entity)
+    - [Creating a base API controller](#creating-a-base-api-controller)
+    - [Creating an Account Controller with a register endpoint](#creating-an-account-controller-with-a-register-endpoint)
+    - [Using the debugger](#using-the-debugger)
+
 <hr/><hr/>
 
 ## Section 2: Building a Walking Skeleton Part One - API
@@ -286,7 +295,7 @@ $ nuget sources update -name <SourceName> -source <NewSourceUrl>
     - Need to install **SQLite Explore and query SQLite databases** extension. Once isntalled open the command pallete. Search SQLite, and select your database.
     - It will then be added to a sqlite explorer in your solution window
 
-- no in sqlite explorer window, `right click` on **Users** > **New Query Insert** >
+- now in sqlite explorer window, `right click` on **Users** > **New Query Insert** >
 ```sql
 INSERT INTO Users (Id, Username)
 VALUES (1, "Bob");
@@ -833,3 +842,210 @@ app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().WithOrigins("ht
 ```
 
 - I've also added the `/ssl/` folder to the `.gitignore` file.
+
+<hr/>
+<hr/>
+
+## Section 4: Authentication Basics
+
+### Intro
+- Implement basic authentication in our app and have and understanind of:
+    - How to store passowrds in the database
+    - Using inheritance in C# - DRY (don't repeat yourself)
+    - Using the C# debugger
+    - Using Data Transfer Objects (DTOs)
+    - Validation
+    - JSON Web Tokens (JWTs)
+    - Using services in C#
+    - Middleware
+    - Extension methods - DRY
+- Where do I start?
+    - Requirements
+        - Users should be able to login
+        - Users should be able to register
+        - Users should be able to view other users
+        - Users should be able to privately message other users
+- everythign starts with **USERS**
+
+<hr/>
+
+### Safe storage of passwords
+- User passes the password in clear text > travels accros the internet > our application Hashes and salts the password before storing it.
+- later on will the salt from out database and `asp.net identity` 
+
+<hr/>
+
+### Updating the user entity
+- first thing we do is disable `dotnet watch` because it's dogshit
+
+```console 
+/c/DatingApp/API:
+$ dotnet watch --no-hot-reload
+```
+
+- **WE'LL HAVE TO ALWAYS ADD THIS FLAG FROM NOW ON**
+
+- Now we're going to add some properties to our `AppUser` entitiy
+- also in my `API.csproj` file i've disabled NULLABLE. The IDE warnings were getting annoying. This also means I've had to update the `Username` property
+
+```cs
+AppUser.cs
+
+namespace API.Entities;
+
+public class AppUser
+{
+    public int Id { get; set; }
+    public string Username { get; set; }
+    public byte[] PasswordHash { get; set; }
+    public byte[] PasswordSalt { get; set; }
+}
+```
+
+- doing tis, we'll now need to create a new migration (remember to do this from the API diectory)
+- since we've already created a previous directory, we do not need to specify the output again.
+
+```console 
+/c/DatingApp/API:
+$ dotnet ef migrations add UserPasswordAdded
+```
+
+ - todo delete and recreate migrations
+<div style="color:red;">
+    ** I had to do this because the nullable thing was becoming annoying, and turning it off, then performing a migration, meant the compiler wasn't picking up the nullability change
+</div>
+
+<hr/>
+
+### Creating a base API controller
+- in this lesson we'll look at ways to prevent repeating ourselves
+- we'll be creating several controllers over this course
+    - every controller needs an 'APIController attribute', a 'Route', and derive fromm the 'ControllerBase'
+    - so instead of deriving from the `ControllerBase`, we're going to derive from our own custom api controller
+
+- In the `Controllers` folder
+    - create a new C# class
+    - Remember: in the `Solution Explorer` view, you can right click to add a new class and accompanying boiler plate
+    - next write the file to be like this
+```c#
+BaseApiController.cs
+
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")] 
+public class BaseApiController : ControllerBase
+{
+
+}
+
+```
+    
+- this allows us to use inhertiance on all future controllers. For example, we can now change our `UsersController.cs` to derive from the `BaseAPIController` rather than the controller base. Saving us from repeating those lines constantly.
+
+```c#
+UserController.cs
+
+using API.Data;
+using API.Entities;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Controllers;
+
+// these have been removed now
+// [ApiController]
+// [Route("api/[controller]")] 
+
+public class UsersController : BaseApiController
+{
+
+}
+
+```
+
+<hr/>
+
+### Creating an Account Controller with a register endpoint
+
+- create a new controller: `AccountController.cs`
+- we we can use our `BaseApiController` now
+- also inject our DataContect into the controller
+
+```c#
+AccountController.cs
+
+using API.Data;
+
+namespace API.Controllers;
+
+public class AccountController : BaseApiController
+{
+    private readonly DataContext _context;
+
+    public AccountController(DataContext context)
+    {
+        _context = context;
+    }
+
+}
+
+```
+
+- now wee need to create our endpoint that our user can use to register an account
+
+```c#
+AccountController.cs
+
+using System.Security.Cryptography;
+using System.Text;
+using API.Data;
+using API.Entities;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+public class AccountController : BaseApiController
+{
+    private readonly DataContext _context;
+
+    public AccountController(DataContext context)
+    {
+        _context = context;
+    }
+
+    [HttpPost("register")] // POST: api/account/register
+    public async Task<ActionResult<AppUser>> Register(string username, string password)
+    {
+        using var hmac = new HMACSHA512();
+
+        var user = new AppUser
+        {
+            Username = username,
+            PasswordHash = hmac.ComputeHash(Encoding.UTF32.GetBytes(password)),
+            PasswordSalt = hmac.Key
+        };
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        return user;
+
+    }
+}
+
+```
+- in the above `hmac` is our hashign algorithm. 
+- we use the `using` variable on hmac because  it allows the use and disposal of a class when it's in and out of use. It's manual garabage handling
+- so now if we fire this in Postman , we'll get an error.
+    - `GetBytes` is expecting a string of `s` as the parameter. But we're giving it `password` which is not being passed in through the method
+        - that's because our `register` method doesn't actually know where to get the password from, even though we gave it as an expectation in the arguments
+- one way around this, ir our `Api.Controller` is able to bidn queries to the arguments. Example:
+    - POST: api/account/register<span style="color: red;">?username=Dave&password=pwd</span>
+    - this isnt ideal obviously, we want to send it up in the body of the request
+
+<hr/>
+
+### Using the debugger
+-
