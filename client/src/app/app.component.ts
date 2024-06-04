@@ -25,7 +25,6 @@ export class AppComponent implements OnInit, OnDestroy {
       data.subscribe({
         next: (response) => {
           this.users = response;
-          console.log(response);
         },
         error: (err) => {
 

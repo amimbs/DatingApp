@@ -31,6 +31,11 @@
     - [Creating a base API controller](#creating-a-base-api-controller)
     - [Creating an Account Controller with a register endpoint](#creating-an-account-controller-with-a-register-endpoint)
     - [Using the debugger](#using-the-debugger)
+    - [Using DTOs](#using-dtos)
+    - [Adding Validation](#adding-validation)
+    - [Adding a Login Endpoint](#adding-a-login-endpoint)
+    - [JSON Web Tokens](#json-web-tokens)
+    - [Creating a User DTO and Returning the Token](#creating-a-user-dto-and-returning-the-token)
 
 <hr/><hr/>
 
@@ -111,7 +116,7 @@
     /c/DatingApp/API:
     $ dotnet watch
     ```
-    - I had to configure my program.css file to handle https.The following was added to the existing boiler plate
+    - I had to configure my program.cs file to handle https.The following was added to the existing boiler plate
     ```c#
     using System.Net;
     // Add HTTPS Redirection service with specified port
@@ -1048,4 +1053,698 @@ public class AccountController : BaseApiController
 <hr/>
 
 ### Using the debugger
--
+- add break point on line 20 of `AccountController.cs`
+- now `Vscode` shouldnt created a `launch.json` in our app, but if it did not:
+    - open the command pallet
+    - search `.net: generate assets for build and debug`
+        - this'll create the `.vscode` folder and 2 files `launch.json tasks.json` in the root of our app
+- open up the terminal and stop the api if it's running
+    - go to the debugging tools in the left hand toolbar of vscode(you should see it's looking at .net and the break point you added)
+        - go through the little drop down and select the `launch` option and press the play button
+- from here we're going to be interested in the `varibles` portion of the debug window
+    - so now we need to make a request using postman, use the endpoint that failed. (ex: register user)
+- another way to do it, is have the application running (note: DOES NOT WORK WITH HOT RELOAD)
+    - `dotnet watch --no-hot-reload`
+    - select the `attach` option from the drop down
+    - press the play button, in the search input look for the `API.exe` to attach the debugger to
+    - fire post man again and you should see the debugger hit
+
+<hr/>
+
+### Using DTOs
+
+- `DTOs` - data transfer objects -  used to encapsulatwe data and send it from one subsystem to another
+- let's start by creating a new folder in our `API` called `DTOS`
+    - New class : `RegisterDto.cs`
+        - to do this remember you can use short cuts from C# dev kit as long as you're in the `solution explorer`, not the app file explorer
+    - add Username and Password as properties in the RegisterDtos object
+    - Now let's go into our account controller and add a check to see if a user name already exists
+```c#
+Account.Controlelr.cs
+
+<--previous code-->
+
+    private async Task<bool> UserExists(string username)
+    {
+        return await _context.Users.AnyAsync(x => x.Username == username);
+    }
+```
+
+- breakdown: async method that's checking our user database, to see if any username in the database matches the username we're passing into it. If there's a match, it returns `true`
+- now we need to use this method in our `AccountController` request
+```c#
+AccountController.cs
+
+    [HttpPost("register")] // POST: api/account/register
+    public async Task<ActionResult<AppUser>> Register(RegisterDtos registerDtos)
+    {
+        if (await UserExists(registerDtos.Username)) return BadRequest("Username is taken");
+
+        using var hmac = new HMACSHA512();
+
+        var user = new AppUser
+
+```
+- notice we had to update our request properties to use the dto we created
+- now we always want to check usernames against the database like for like. Especially since we don't know if the user used lowercase or uppercase
+
+```c#
+
+AccountController.cs
+
+using System.Security.Cryptography;
+using System.Text;
+using API.Data;
+using API.Entities;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Controllers;
+public class AccountController : BaseApiController
+{
+    private readonly DataContext _context;
+
+    public AccountController(DataContext context)
+    {
+        _context = context;
+    }
+
+    [HttpPost("register")] // POST: api/account/register
+    public async Task<ActionResult<AppUser>> Register(RegisterDto registerDto)
+    {
+        if (await UserExists(registerDto.Username)) return BadRequest("Username is taken");
+
+        using var hmac = new HMACSHA512();
+
+        var user = new AppUser
+        {
+            Username = registerDto.Username.ToLower(),
+            PasswordHash = hmac.ComputeHash(Encoding.UTF32.GetBytes(registerDto.Password)),
+            PasswordSalt = hmac.Key
+        };
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        return user;
+
+    }
+
+    private async Task<bool> UserExists(string username)
+    {
+        return await _context.Users.AnyAsync(x => x.Username == username.ToLower());
+    }
+}
+
+
+```
+
+- now let's use the debugger
+    -  first be sure the api is running
+```bash
+
+dotnet watch --no-hot-reload
+
+```
+
+- then attach the debugger to `Api.exe`
+- drop a break point on our `if` check and fire the request using postMan
+
+
+<hr/>
+
+### Adding Validation
+
+- example: sending an empty username or password
+- We can do this using our DTO before we ever hit our request
+
+```c#
+
+RegisterDto.cs
+
+using System.ComponentModel.DataAnnotations;
+
+namespace API;
+
+public class RegisterDto
+{
+    [Required]
+    public string Username { get; set; }
+
+    [Required]
+    public string Password { get; set; }
+}
+
+
+```
+
+- this is thanks to the [ApiController] attribute e've used in our `BaseApiController`
+    - this also checks for validations before a request even gets inside another api controller 
+- now fire the request in postman again, attempting to use empty password or name
+- You should get 400 bad request error
+
+<hr/>
+
+### Adding a Login Endpoint
+
+- in the `AccountController` let's set up a way to confirm the username and password match when a user tries to login. If things match we'l just return the AppUser
+
+- So first let's add a new Post method
+
+```c#
+
+AccountController.cs
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AppUser>> Login(LoginDto logindto)
+    {
+
+    }
+
+
+```
+
+- We'll also create a login dto for this, in our DTOs folder
+
+```c#
+
+LoginDto.cs
+
+namespace API.DTOs;
+
+public class LoginDto
+{
+    public string Username { get; set; }
+
+    public string Password { get; set; }
+}
+
+```
+
+- now back in our post method we need to get the user from our database so we can compare against the login attempt
+
+```c#
+
+AccountController.cs
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AppUser>> Login(LoginDto loginDto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(x => x.Username == loginDto.Username);
+
+        if (user == null) return Unauthorized("Not a valid User");
+    }
+
+    private async Task<bool> UserExists(string username)
+    {
+        return await _context.Users.AnyAsync(x => x.Username == username.ToLower());
+    }
+
+
+```
+
+
+- Now we compare the password. But first we have to reverse the hasing of the password when it was created!
+
+```c#
+
+AccountController.cs
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AppUser>> Login(LoginDto loginDto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(x => x.Username == loginDto.Username);
+
+        if (user == null) return Unauthorized("Not a valid User");
+
+        using var hmac = new HMACSHA512(user.PasswordSalt);
+
+        var compuedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(loginDto.Password));
+    }
+
+
+```
+**Notes**
+- I made an error with the register api earlier. I was using UTF32 to has the password and then using UTF8 to reverse the has in the login. Causing an error. 
+- I switched the register method to hash using UTF8 and this fixed the bug
+
+<hr/>
+
+### JSON Web Tokens
+- An API does not maintain our session state, so we need to ask ourselves: "How do we authenticate to an API?"
+    - Tokens
+- Tokens are great for this, and are small enough that they can be sent with every single request to our API.
+    - Self Contained
+    - Claims (who the user is claiming to be)
+    - Other Information
+    ![JWT Structure](image.png)
+- How token auth works:
+![JWT Token and APi flow](image-1.png)
+- Benefits of JWT
+    - No sessions to manage
+    portable - a single token can be used w/ multiple backends
+    - No cookies required - modile friendly
+    - Performance - once a token is issued, there is no need to mkae a DB request to verify a users auth
+
+<hr/>
+
+### Adding a Token Service
+
+- We're going to create a service that issues a jwt to our users
+    - to do this, we start by creating an `Interface`
+        - this tells the implementation of the service, what methods it supports.
+- Start by creating a new folder in the `API` project called `Interfaces`
+    - then create a new interface file in this folder called `ITokenService`
+        - Typically it's best practice for an interface to eb prefixed with the letter `I`
+```c#
+
+ITokenService.cs
+
+using API.Entities;
+
+namespace API.Interfaces
+{
+    public interface ITokenService
+    {
+        string CreateToek(AppUser user);
+    }
+
+};
+
+```
+
+- Now let's create another new folder in our API called `Services`
+    - create a new class called `TokenService`
+```c#
+
+TokenService.cs
+
+using API.Entities;
+using API.Interfaces;
+
+namespace API.Services
+{
+    public class TokenService : ITokenService
+    {
+        public string CreateToken(AppUser user)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+
+```
+
+- Now we just add this to our program class in our service container so that it's available.
+- In here we have options regarding how long we want this token to be available for
+    - In most occassions using `AddScoped<>` is appropriate because it creates a token when needed and closes the service and token when the applications closes
+
+```c#
+
+Program.cs
+
+using System.Net;
+using API.Data;
+using API.Interfaces;
+using API.Services;
+using Microsoft.EntityFrameworkCore;
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+builder.Services.AddDbContext<DataContext>(opt => 
+{
+    opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
+
+builder.Services.AddCors();
+builder.Services.AddScoped<ITokenService, TokenService>();
+
+```
+
+<hr/>
+
+### Adding the Create Token Logic
+
+- first thing we need a nuget package
+    - System.Identity
+        - the version isn't important, add it to the csproj file
+- Now let's go to our `TokenService`
+    - Add a constructor for configuration to store our token key
+```c#
+
+TokenService.cs
+
+using API.Entities;
+using API.Interfaces;
+using Microsoft.IdentityModel.Tokens;
+
+
+namespace API.Services
+{
+    public class TokenService : ITokenService
+    {
+
+        private readonly SymmetricSecurityKey _key;
+
+        public TokenService(IConfiguration config)
+        {
+            _key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["TokenKey"]));
+        }
+
+        public string CreateToken(AppUser user)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+
+```
+
+- Now we need to create claims
+    - A `claim` is a bit of info the user claims about themselves
+    - So for our purposes, our suer will be claiming their username
+    - And we'll attach credentials to that name using a security algorithm and tell ti when to expire (7 days)
+
+```c#
+
+TokenService.cs
+
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using API.Entities;
+using API.Interfaces;
+using Microsoft.IdentityModel.Tokens;
+
+namespace API.Services
+{
+    public class TokenService : ITokenService
+    {
+        private readonly SymmetricSecurityKey _key;
+
+        public TokenService(IConfiguration config)
+        {
+            _key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["TokenKey"]));
+        }
+        public string CreateToken(AppUser user)
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(JwtRegisteredClaimNames.NameId, user.Username)
+            };
+            
+            var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha512Signature);
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.Now.AddDays(7),
+                SigningCredentials = creds
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+
+            return tokenHandler.WriteToken(token);
+        }
+    }
+}
+
+```
+
+<hr/>
+
+### Creating a User DTO and Returning the Token
+- so now we need to return our token when our user logins in or registers
+- Let's do this by creating a class called `UserDto`.
+    - Inside add 2 properties:
+
+```c#
+
+UserDto.cs
+
+namespace API.DTOs;
+
+public class UserDto
+{
+    public string Username { get; set; }
+    public string Token { get; set; }
+}
+
+```
+
+- Now we need to go back to our account controller and inject our `IToken` Service and Interface
+- And instead of returning our AppUser, we'll return our `UserDto`when the user registers
+    - do the exact same for Login
+
+```c#
+
+AccountController.cs
+
+using System.Security.Cryptography;
+using System.Text;
+using API.Data;
+using API.DTOs;
+using API.Entities;
+using API.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Controllers;
+public class AccountController : BaseApiController
+{
+    private readonly DataContext _context;
+    private readonly ITokenService _tokenService;
+
+    public AccountController(DataContext context, ITokenService tokenService)
+    {
+        _tokenService = tokenService;
+        _context = context;
+    }
+
+    [HttpPost("register")] // POST: api/account/register
+    public async Task<ActionResult<UserDto>> Register(RegisterDto registerDto)
+    {
+        if (await UserExists(registerDto.Username)) return BadRequest("Username is taken");
+
+        using var hmac = new HMACSHA512();
+
+        var user = new AppUser
+        {
+            Username = registerDto.Username.ToLower(),
+            PasswordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(registerDto.Password)),
+            PasswordSalt = hmac.Key
+        };
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        return new UserDto
+        {
+            Username = user.Username,
+            Token = _tokenService.CreateToken(user)
+        };
+
+    }
+
+    [HttpPost("login")]
+    public async Task<ActionResult<UserDto>> Login(LoginDto loginDto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(x => x.Username == loginDto.Username);
+
+        if (user == null) return Unauthorized("Invalid Username");
+
+        using var hmac = new HMACSHA512(user.PasswordSalt);
+
+        var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(loginDto.Password));
+
+        for (int i = 0; i < computedHash.Length; i++)
+        {
+            if (computedHash[i] != user.PasswordHash[i]) return Unauthorized("Invalid Password");
+        }
+
+        return new UserDto
+        {
+            Username = user.Username,
+            Token = _tokenService.CreateToken(user)
+        };
+    }
+
+    private async Task<bool> UserExists(string username)
+    {
+        return await _context.Users.AnyAsync(x => x.Username == username.ToLower());
+    }
+}
+
+
+```
+
+- Go back to `TokenService`, notice we have a configuration for a token key.
+    - we need to add this key in our `appsettings.Development.json`
+        - in the real world NEVER put the token in the `appsettings.json`. We're doing it here just because it's for development.
+
+```json
+
+appsettings.Development.json
+
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Information"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Data source=datingapp.db"
+  },
+  "TokenKey": "grayllama54 mu)dyHorn97 blac<Horse80 pin<Shape54 gr3enBoo23 coolP!g50 braveLun(h77"
+}
+
+
+```
+
+- Test out the code by logging in. We should see it return the token
+
+![postman token test](image-2.png)
+
+<hr/>
+
+### Adding the Authentication Middleware
+
+ - open `AccountController` and `UsersController`
+    - in the `UsersController` we can specify users can only utilize specific endpoints, if theya re authorized to it. This is done through an Attribute: `[Authorize]`
+        -`[AllowAnonymous]` specifies that an endpoint requires no authentication
+
+```c#
+
+UsersController.cs
+
+using API.Data;
+using API.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Controllers;
+
+[Authorize]
+public class UsersController : BaseApiController
+{
+    private readonly DataContext _context;
+
+    public UsersController(DataContext context)
+    {
+        _context = context;
+    }
+
+    [AllowAnonymous]
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
+    {
+        var users = await _context.Users.ToListAsync();
+
+        return users;
+    }
+
+    [HttpGet("{id}")] // this get is looking for a user with an id that matchers the number in the parameter
+    public async Task<ActionResult<AppUser>> GetUser(int id)
+    {
+        var user = await _context.Users.FindAsync(id);
+
+        if (user == null)
+        {
+            return NotFound(); // Or return another meaningful response.
+        }
+
+        return user;
+    }
+}
+
+```
+- Now we need to tell our program how to authenticate.
+    - go to the `Program.cs`
+    - add the `AddAuthentication` service.
+        - We need to bringing another nuget package
+            - Search `microsoft.aspnecore.authentication`
+                - bringing the JwtBear package by adding it the `API.csproj`
+- Now add the logic
+
+```c#
+using System.Net;
+using System.Text;
+using API.Data;
+using API.Interfaces;
+using API.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+builder.Services.AddDbContext<DataContext>(opt => 
+{
+    opt.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
+
+builder.Services.AddCors();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options => 
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["TokenKey"])),
+            ValidateIssuer = false,
+            ValidateAudience = false
+        };
+    }
+);
+
+// Add HTTPS Redirection service with specified port
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.RedirectStatusCode = (int)HttpStatusCode.TemporaryRedirect;
+    options.HttpsPort = 5001;
+});
+
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+app.UseCors(builder => builder.AllowAnyHeader().AllowAnyMethod().WithOrigins("https://localhost:4200"));
+
+app.UseHttpsRedirection();
+
+app.UseAuthentication();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+```
+
+- Now let's test our code
+    - remember we require no auth on GetUsers, so go to postman and run the query to get users
+    Now pick a user and ID
+- Try to get that user by their ID
+    - since we require Auth on get user by ID, you'll see an 401 error Unauthorized
+- so to test this login in as that user and get the token that is returned with succesful login
+    - go to postman and use the `Get User With Bearer Token` query and past in the token  as the authorization value in the Headers
+- run the query and you should see the user and their data returned in the response
+
+![Succesful bearer auth](image-3.png)
+
+<hr/>
+
+### Adding Extension Methods
+- let's clean up our Program class by abstracting our services out into extension methods
+- start by creating an `Extensions` fodler at the Api root
+- create a new class called `ApplicationServiceExtensions.cs`
